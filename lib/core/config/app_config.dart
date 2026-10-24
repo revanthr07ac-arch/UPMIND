@@ -1,3 +1,4 @@
+import 'dart:convert' show jsonDecode;
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 
@@ -67,14 +68,14 @@ class AppConfig {
         for (final filename in candidates) {
           final file = File(filename);
           if (await file.exists()) {
-            final lines = await file.readAsLines();
-            final envMap = _parseEnvLines(lines);
+            final content = await file.readAsString();
+            final envMap = _parseEnvContent(content);
 
-            final fileUrl = envMap['NEXT_PUBLIC_SUPABASE_URL'] ??
-                envMap['SUPABASE_URL'];
-            final fileKey = envMap['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ??
+            final fileUrl = envMap['SUPABASE_URL'] ??
+                envMap['NEXT_PUBLIC_SUPABASE_URL'];
+            final fileKey = envMap['SUPABASE_ANON_KEY'] ??
+                envMap['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ??
                 envMap['NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'] ??
-                envMap['SUPABASE_ANON_KEY'] ??
                 envMap['SUPABASE_PUBLISHABLE_KEY'];
 
             if (_runtimeUrl == null && fileUrl != null && _isValidUrl(fileUrl)) {
@@ -93,7 +94,17 @@ class AppConfig {
     }
   }
 
-  static Map<String, String> _parseEnvLines(List<String> lines) {
+  static Map<String, String> _parseEnvContent(String content) {
+    final trimmed = content.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        final decoded = jsonDecode(trimmed);
+        if (decoded is Map) {
+          return decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+        }
+      } catch (_) {}
+    }
+    final lines = trimmed.split('\n');
     final map = <String, String>{};
     for (var line in lines) {
       line = line.trim();
