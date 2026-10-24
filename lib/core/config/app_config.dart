@@ -135,15 +135,15 @@ class AppConfig {
 
   /// Current active Supabase project URL
   static String get supabaseUrl {
+    if (_runtimeUrl != null) return _runtimeUrl!.trim();
     if (_isValidUrl(_compileTimeUrl)) return _compileTimeUrl.trim();
-    if (_isValidUrl(_runtimeUrl)) return _runtimeUrl!.trim();
     return '';
   }
 
   /// Current active Supabase anonymous / publishable key
   static String get supabaseAnonKey {
+    if (_runtimeAnonKey != null) return _runtimeAnonKey!.trim();
     if (_isValidKey(_compileTimeAnonKey)) return _compileTimeAnonKey.trim();
-    if (_isValidKey(_runtimeAnonKey)) return _runtimeAnonKey!.trim();
     return '';
   }
 
@@ -168,13 +168,20 @@ class AppConfig {
 
   /// Injects credentials programmatically (useful for tests and dynamic setups)
   static void setMockCredentials({String? url, String? anonKey}) {
-    _runtimeUrl = url;
-    _runtimeAnonKey = anonKey;
+    _runtimeUrl = url ?? '';
+    _runtimeAnonKey = anonKey ?? '';
     _initialized = true;
   }
 
-  /// Resets credentials (used in teardown of unit tests)
+  /// Resets credentials (used in teardown of unit tests to simulate unconfigured state)
   static void resetCredentials() {
+    _runtimeUrl = '';
+    _runtimeAnonKey = '';
+    _initialized = true;
+  }
+
+  /// Clears overrides back to default uninitialized state
+  static void clearMockCredentials() {
     _runtimeUrl = null;
     _runtimeAnonKey = null;
     _initialized = false;
