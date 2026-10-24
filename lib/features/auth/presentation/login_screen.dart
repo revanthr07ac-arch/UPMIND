@@ -32,24 +32,75 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailController.text.trim();
     final success = await ref
         .read(authNotifierProvider.notifier)
-        .signIn(_emailController.text.trim(), _passwordController.text);
+        .signIn(email, _passwordController.text);
 
     if (success && mounted) {
       context.go('/feed');
     } else if (mounted) {
-      final error =
-          ref.read(authNotifierProvider).errorMessage ??
-          'Invalid email or password';
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error),
-          backgroundColor: AppColors.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      final authState = ref.read(authNotifierProvider);
+      final error = authState.errorMessage ?? 'Invalid email or password';
+
+      if (authState.errorCode == 'EMAIL_NOT_CONFIRMED') {
+        _showUnverifiedEmailDialog(email);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
+  }
+
+  void _showUnverifiedEmailDialog(String email) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: AppColors.card,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: AppColors.border),
+        ),
+        title: Text(
+          'Email Verification Required',
+          style: AppTypography.h3,
+        ),
+        content: Text(
+          'Your account has not been verified yet. Please enter the 6-digit verification code sent to $email.',
+          style: AppTypography.bodySecondary,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryBlue,
+              foregroundColor: AppColors.textPrimary,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.push(
+                Uri(
+                  path: '/verify-otp',
+                  queryParameters: {'email': email},
+                ).toString(),
+              );
+            },
+            child: const Text('Enter Code'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

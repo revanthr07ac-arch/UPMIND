@@ -175,13 +175,16 @@ class _HomeFeedScreenState extends ConsumerState<HomeFeedScreen> {
     final filtered = _filteredPosts;
 
     if (filtered.isEmpty) {
+      final isTutorialFilter = _selectedFilter == FeedFilter.tutorials;
       return EmptyState(
-        icon: Icons.dynamic_feed_rounded,
-        title: _selectedFilter == FeedFilter.tutorials
+        icon: isTutorialFilter
+            ? Icons.menu_book_outlined
+            : Icons.dynamic_feed_rounded,
+        title: isTutorialFilter && _posts.isNotEmpty
             ? 'No Tutorials Yet'
-            : 'Your Feed is Empty',
-        message: 'Share your skills, publish a tutorial, or discover creators to follow!',
-        actionText: 'Create a Post',
+            : 'Your feed is empty',
+        message: 'Share your knowledge and start your learning journey.',
+        actionText: 'Create Post',
         onAction: () => context.push('/create-post'),
       );
     }

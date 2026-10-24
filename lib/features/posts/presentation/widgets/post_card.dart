@@ -286,11 +286,11 @@ class _PostCardState extends ConsumerState<PostCard> {
           if (widget.post.isTutorial &&
               widget.post.educationalDescription != null) ...[
             const SizedBox(height: 10),
-            Container(
-              decoration: BoxDecoration(
-                color: AppColors.background.withOpacity(0.6),
+            Material(
+              color: AppColors.background.withOpacity(0.6),
+              shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.border, width: 1),
+                side: const BorderSide(color: AppColors.border, width: 1),
               ),
               child: Theme(
                 data: Theme.of(context)

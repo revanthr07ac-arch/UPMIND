@@ -139,12 +139,12 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Email: ${user?.email ?? "demo@upmind.app"}',
+                  'Email: ${user?.email ?? "Not signed in"}',
                   style: AppTypography.bodyMedium,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'User ID: ${user?.id ?? "demo-user-id"}',
+                  'User ID: ${user?.id ?? "—"}',
                   style: AppTypography.caption,
                 ),
               ],

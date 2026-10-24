@@ -74,4 +74,34 @@ class Validators {
     }
     return null;
   }
+
+  static final RegExp _otpRegExp = RegExp(r'^\d{6}$');
+
+  static String? validateOtp(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'Verification code is required';
+    }
+    final trimmed = value.trim();
+    if (trimmed.length != 6 || !_otpRegExp.hasMatch(trimmed)) {
+      return 'Please enter a valid 6-digit code';
+    }
+    return null;
+  }
+
+  static String maskEmail(String email) {
+    final trimmed = email.trim();
+    if (!trimmed.contains('@')) return trimmed;
+    final parts = trimmed.split('@');
+    final name = parts[0];
+    final domain = parts.length > 1 ? parts[1] : '';
+    if (name.length <= 2) {
+      return '${name.isNotEmpty ? name[0] : '*'}*@$domain';
+    } else if (name.length <= 4) {
+      return '${name[0]}**${name[name.length - 1]}@$domain';
+    } else {
+      final prefix = name.substring(0, 2);
+      final suffix = name.substring(name.length - 1);
+      return '$prefix***$suffix@$domain';
+    }
+  }
 }

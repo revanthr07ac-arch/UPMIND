@@ -12,6 +12,7 @@ import '../../../core/widgets/custom_text_field.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/loading_indicator.dart';
 import '../../../core/widgets/user_avatar.dart';
+import '../../auth/data/auth_repository.dart';
 import '../../profiles/domain/profile_model.dart';
 import '../../skills/data/skill_repository.dart';
 import '../../skills/domain/skill_model.dart';
@@ -31,6 +32,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
   List<SkillModel> _skills = [];
   String? _selectedCategory;
   bool _isSearching = false;
+  final Set<String> _followingIds = {};
 
   @override
   void initState() {
@@ -40,18 +42,22 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
 
   Future<void> _loadInitialData() async {
     final skills = await ref.read(skillRepositoryProvider).fetchSkillsCatalog();
-    final teachers = await ref.read(discoverRepositoryProvider).searchUsers('');
+    final users = await ref.read(discoverRepositoryProvider).searchUsers('');
     if (mounted) {
       setState(() {
         _skills = skills;
-        _searchResults = teachers;
+        _searchResults = users;
+        _followingIds.clear();
+        for (final u in users) {
+          if (u.isFollowing) _followingIds.add(u.id);
+        }
       });
     }
   }
 
   void _onSearchChanged(String query) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () async {
+    _debounce = Timer(const Duration(milliseconds: 300), () async {
       setState(() => _isSearching = true);
       final results = await ref
           .read(discoverRepositoryProvider)
@@ -59,10 +65,52 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
       if (mounted) {
         setState(() {
           _searchResults = results;
+          for (final u in results) {
+            if (u.isFollowing) _followingIds.add(u.id);
+          }
           _isSearching = false;
         });
       }
     });
+  }
+
+  Future<void> _toggleFollow(ProfileModel user) async {
+    final currentUserId = ref.read(authRepositoryProvider).currentUser?.id;
+    if (currentUserId == null || currentUserId == user.id) return;
+
+    final isCurrentlyFollowing = _followingIds.contains(user.id);
+    setState(() {
+      if (isCurrentlyFollowing) {
+        _followingIds.remove(user.id);
+      } else {
+        _followingIds.add(user.id);
+      }
+    });
+
+    try {
+      final repo = ref.read(discoverRepositoryProvider);
+      if (isCurrentlyFollowing) {
+        await repo.unfollowUser(user.id);
+      } else {
+        await repo.followUser(user.id);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (isCurrentlyFollowing) {
+            _followingIds.add(user.id);
+          } else {
+            _followingIds.remove(user.id);
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Action failed: ${e.toString()}'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   @override
@@ -77,7 +125,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
     final categories = {'All', ..._skills.map((s) => s.category)};
 
     return Scaffold(
-      appBar: AppBar(title: Text('Discover & Learn', style: AppTypography.h3)),
+      appBar: AppBar(title: Text('Discover & Connect', style: AppTypography.h3)),
       body: CustomScrollView(
         slivers: [
           // Search Bar
@@ -86,7 +134,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: CustomTextField(
                 controller: _searchController,
-                hintText: 'Search by skill, name, or username...',
+                hintText: 'Search by username or display name...',
                 prefixIcon: const Icon(
                   Icons.search,
                   color: AppColors.textMuted,
@@ -105,7 +153,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 scrollDirection: Axis.horizontal,
                 itemCount: categories.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
                 itemBuilder: (context, index) {
                   final cat = categories.elementAt(index);
                   final isSelected =
@@ -152,16 +200,16 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             ),
           ),
 
-          // Teachers Heading
+          // Members Heading
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Skill Mentors & Teachers', style: AppTypography.h3),
+                  Text('Global Members & Peers', style: AppTypography.h3),
                   Text(
-                    '${_searchResults.length} available',
+                    '${_searchResults.length} members',
                     style: AppTypography.caption,
                   ),
                 ],
@@ -169,7 +217,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             ),
           ),
 
-          // Teachers List
+          // Members List
           if (_isSearching)
             const SliverToBoxAdapter(
               child: Padding(
@@ -181,8 +229,8 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
             const SliverToBoxAdapter(
               child: EmptyState(
                 icon: Icons.person_search_outlined,
-                title: 'No Mentors Found',
-                message: 'Try searching for a different skill or topic.',
+                title: 'No Members Found',
+                message: 'Try searching for another username or display name.',
               ),
             )
           else
@@ -191,97 +239,157 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final user = _searchResults[index];
+                  final isFollowing = _followingIds.contains(user.id);
+
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: CustomCard(
-                      padding: const EdgeInsets.all(14),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          UserAvatar(
-                            name: user.fullName,
-                            imageUrl: user.avatarUrl,
-                            radius: 24,
-                            onTap: () => context.push('/profile/${user.id}'),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        user.fullName,
-                                        style: AppTypography.bodyMedium
-                                            .copyWith(
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 6,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primaryBlue
-                                            .withOpacity(0.15),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        'CAN TEACH',
-                                        style: AppTypography.caption.copyWith(
-                                          color: AppColors.primaryBlue,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
+                    child: InkWell(
+                      onTap: () async {
+                        await context.push('/profile/${user.id}');
+                        if (mounted) _loadInitialData();
+                      },
+                      borderRadius: BorderRadius.circular(16),
+                      child: CustomCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            UserAvatar(
+                              name: user.fullName,
+                              imageUrl: user.avatarUrl,
+                              radius: 24,
+                              onTap: () async {
+                                await context.push('/profile/${user.id}');
+                                if (mounted) _loadInitialData();
+                              },
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Flexible(
+                                        child: Text(
+                                          user.fullName,
+                                          style: AppTypography.bodyMedium
+                                              .copyWith(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ),
+                                      if (user.institution != null && user.institution!.isNotEmpty)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryBlue
+                                                .withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            user.institution!,
+                                            style: AppTypography.caption.copyWith(
+                                              color: AppColors.primaryBlue,
+                                              fontSize: 9,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  Text(
+                                    '@${user.username}',
+                                    style: AppTypography.caption,
+                                  ),
+                                  if (user.course != null && user.course!.isNotEmpty) ...[
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      user.course!,
+                                      style: AppTypography.caption.copyWith(
+                                        color: AppColors.textMuted,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
-                                ),
-                                Text(
-                                  '@${user.username}',
-                                  style: AppTypography.caption,
-                                ),
-                                if (user.bio != null) ...[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    user.bio!,
-                                    style: AppTypography.bodySecondary.copyWith(
-                                      fontSize: 12,
+                                  if (user.bio != null && user.bio!.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      user.bio!,
+                                      style: AppTypography.bodySecondary.copyWith(
+                                        fontSize: 12,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                  ],
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '${user.followersCount} followers',
+                                        style: AppTypography.caption,
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CustomButton(
+                                            text: isFollowing ? 'Following' : 'Follow',
+                                            variant: isFollowing
+                                                ? ButtonVariant.outline
+                                                : ButtonVariant.primary,
+                                            height: 32,
+                                            width: 90,
+                                            onPressed: () => _toggleFollow(user),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          CustomButton(
+                                            text: 'Profile',
+                                            variant: ButtonVariant.secondary,
+                                            height: 32,
+                                            width: 70,
+                                            onPressed: () async {
+                                              await context.push('/profile/${user.id}');
+                                              if (mounted) _loadInitialData();
+                                            },
+                                          ),
+                                          const SizedBox(width: 4),
+                                          IconButton(
+                                            icon: const Icon(
+                                              Icons.school_outlined,
+                                              size: 20,
+                                              color: AppColors.primaryBlue,
+                                            ),
+                                            tooltip: 'Request to Learn',
+                                            onPressed: () => _openRequestSheet(user),
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(
+                                              minWidth: 32,
+                                              minHeight: 32,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ],
-                                const SizedBox(height: 10),
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      '${user.followersCount} followers',
-                                      style: AppTypography.caption,
-                                    ),
-                                    CustomButton(
-                                      text: 'Request to Learn',
-                                      onPressed: () => _openRequestSheet(user),
-                                      variant: ButtonVariant.primary,
-                                      width: 130,
-                                      height: 32,
-                                    ),
-                                  ],
-                                ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
                   );
@@ -340,7 +448,7 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: selectedSkillId,
+                initialValue: selectedSkillId,
                 dropdownColor: AppColors.cardElevated,
                 items: _skills
                     .map(
@@ -381,7 +489,6 @@ class _DiscoverScreenState extends ConsumerState<DiscoverScreen> {
                   Navigator.pop(ctx);
                   try {
                     await ref.read(discoverRepositoryProvider).searchUsers('');
-                    // Send via learning repository
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(

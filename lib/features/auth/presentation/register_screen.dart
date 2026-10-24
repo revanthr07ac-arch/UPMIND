@@ -38,10 +38,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailController.text.trim();
     final success = await ref
         .read(authNotifierProvider.notifier)
         .signUp(
-          email: _emailController.text.trim(),
+          email: email,
           password: _passwordController.text,
           fullName: _fullNameController.text.trim(),
           username: _usernameController.text.trim().toLowerCase(),
@@ -50,12 +51,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Account created! Welcome to UPMIND.'),
-          backgroundColor: AppColors.success,
+          content: Text(
+            'Verification code sent! Please verify your email to continue.',
+          ),
+          backgroundColor: AppColors.primaryBlue,
           behavior: SnackBarBehavior.floating,
         ),
       );
-      context.go('/feed');
+      context.push(
+        Uri(
+          path: '/verify-otp',
+          queryParameters: {'email': email},
+        ).toString(),
+      );
     } else if (mounted) {
       final error =
           ref.read(authNotifierProvider).errorMessage ?? 'Registration failed';
@@ -106,7 +114,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   CustomTextField(
                     controller: _fullNameController,
                     label: 'Full Name',
-                    hintText: 'Alex Vance',
+                    hintText: 'Enter your full name',
                     prefixIcon: const Icon(
                       Icons.person_outline,
                       color: AppColors.textMuted,
@@ -118,7 +126,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   CustomTextField(
                     controller: _usernameController,
                     label: 'Username',
-                    hintText: 'alex_vance',
+                    hintText: 'e.g. johndoe',
                     prefixIcon: const Icon(
                       Icons.alternate_email,
                       color: AppColors.textMuted,

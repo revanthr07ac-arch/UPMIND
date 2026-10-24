@@ -6,6 +6,7 @@ import '../features/auth/data/auth_repository.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/register_screen.dart';
+import '../features/auth/presentation/verify_otp_screen.dart';
 import '../features/discover/presentation/discover_screen.dart';
 import '../features/home/presentation/home_feed_screen.dart';
 import '../features/learning/presentation/learning_coach_screen.dart';
@@ -15,6 +16,7 @@ import '../features/posts/presentation/create_post_screen.dart';
 import '../features/posts/presentation/post_detail_screen.dart';
 import '../features/profiles/presentation/edit_profile_screen.dart';
 import '../features/profiles/presentation/profile_screen.dart';
+import '../features/profiles/presentation/user_list_screen.dart';
 import '../features/settings/presentation/settings_screen.dart';
 import 'main_scaffold.dart';
 
@@ -31,9 +33,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthRoute =
           state.matchedLocation == '/login' ||
           state.matchedLocation == '/register' ||
-          state.matchedLocation == '/forgot-password';
+          state.matchedLocation == '/forgot-password' ||
+          state.matchedLocation == '/verify-otp';
 
-      // Allow users to browse in demo mode if unauthenticated or redirect
+      // Disallow unverified / unauthenticated users from entering protected screens
       if (!isAuthenticated && !isAuthRoute) {
         return '/login';
       }
@@ -53,6 +56,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/forgot-password',
         builder: (context, state) => const ForgotPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/verify-otp',
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'] ?? '';
+          return VerifyOtpScreen(email: email);
+        },
       ),
 
       // Main Navigation Tabs
@@ -120,6 +130,32 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final id = state.pathParameters['id'];
           return ProfileScreen(userId: id);
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/profile/:id/followers',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final username = state.uri.queryParameters['username'] ?? '';
+          return UserListScreen(
+            userId: id,
+            username: username,
+            type: UserListType.followers,
+          );
+        },
+      ),
+      GoRoute(
+        parentNavigatorKey: _rootNavigatorKey,
+        path: '/profile/:id/following',
+        builder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          final username = state.uri.queryParameters['username'] ?? '';
+          return UserListScreen(
+            userId: id,
+            username: username,
+            type: UserListType.following,
+          );
         },
       ),
       GoRoute(

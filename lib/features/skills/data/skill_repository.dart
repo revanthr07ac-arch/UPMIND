@@ -117,29 +117,7 @@ class SkillRepository {
   Future<List<UserSkillModel>> fetchUserSkills(String userId) async {
     try {
       if (!AppConfig.isSupabaseConfigured) {
-        return [
-          const UserSkillModel(
-            id: 'us-1',
-            userId: 'demo-user-id',
-            skillId: '1',
-            skillName: 'Flutter & Dart',
-            skillCategory: 'Mobile Development',
-            intent: 'teaching',
-            experienceLevel: 'advanced',
-            description:
-                'Can teach cross-platform architecture and state management',
-          ),
-          const UserSkillModel(
-            id: 'us-2',
-            userId: 'demo-user-id',
-            skillId: '2',
-            skillName: 'UI/UX Design',
-            intent: 'learning',
-            skillCategory: 'Design',
-            experienceLevel: 'beginner',
-            description: 'Want to learn design systems in Figma',
-          ),
-        ];
+        return [];
       }
 
       final response = await _supabase

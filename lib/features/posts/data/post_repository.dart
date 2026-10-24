@@ -19,49 +19,41 @@ class PostRepository {
 
   PostRepository(this._supabase);
 
-  // Fallback demo posts when unconfigured
-  static final List<PostModel> _demoPosts = [
-    PostModel(
-      id: 'demo-post-1',
-      authorId: 'user-2',
-      authorUsername: 'sarah_design',
-      authorFullName: 'Sarah Chen',
-      authorAvatarUrl: null,
-      caption: '🚀 Master the 8pt Grid System in UI Design! Consistent rhythm and spacing makes your Flutter & Web interfaces feel world-class. Here is a quick tutorial breakdown.',
-      postType: 'tutorial',
-      educationalDescription: 'Step 1: Set base unit = 8px.\nStep 2: Use 8, 16, 24, 32, 48, 64 for paddings.\nStep 3: Line heights should snap to multiples of 4 or 8.',
-      skillTags: ['UI/UX Design', 'Design Systems'],
-      likesCount: 38,
-      commentsCount: 6,
-      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    ),
-    PostModel(
-      id: 'demo-post-2',
-      authorId: 'user-3',
-      authorUsername: 'marcus_code',
-      authorFullName: 'Marcus Thorne',
-      authorAvatarUrl: null,
-      caption: 'Just published my open-source Riverpod 2.0 template with GoRouter and clean feature-first architecture! Check out the state caching tips.',
-      postType: 'text',
-      skillTags: ['Flutter & Dart', 'State Management'],
-      likesCount: 52,
-      commentsCount: 14,
-      createdAt: DateTime.now().subtract(const Duration(hours: 7)),
-    ),
-  ];
-
-  Future<List<PostModel>> getFeed({int limit = 15, int offset = 0}) async {
+  /// Retrieves the authenticated user's global social feed.
+  /// Shows posts from the authenticated user's followed accounts,
+  /// with the logged-in user's own posts included.
+  /// Never returns hardcoded demo data, Sarah Chen, or Marcus Thorne posts.
+  Future<List<PostModel>> getFeed({int limit = 20, int offset = 0}) async {
     try {
       if (!AppConfig.isSupabaseConfigured) {
-        return _demoPosts;
+        return [];
       }
 
-      final currentUid = _supabase.auth.currentUser?.id;
+      final currentUser = _supabase.auth.currentUser;
+      if (currentUser == null) {
+        return [];
+      }
+      final currentUid = currentUser.id;
 
+      // 1. Fetch IDs of accounts the current user follows
+      final followingRes = await _supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', currentUid);
+
+      final List<String> targetAuthorIds = [currentUid];
+      for (final item in followingRes) {
+        final fid = item['following_id']?.toString();
+        if (fid != null && fid.isNotEmpty && !targetAuthorIds.contains(fid)) {
+          targetAuthorIds.add(fid);
+        }
+      }
+
+      // 2. Query database for posts from followed accounts + own posts
       final data = await _supabase
           .from('posts')
           .select('*, profiles(username, full_name, avatar_url)')
-          .eq('visibility', 'public')
+          .filter('author_id', 'in', '(${targetAuthorIds.join(",")})')
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);
 
@@ -73,7 +65,7 @@ class PostRepository {
       Set<String> likedPostIds = {};
       Set<String> savedPostIds = {};
 
-      if (currentUid != null) {
+      try {
         final likesData = await _supabase
             .from('likes')
             .select('post_id')
@@ -93,6 +85,8 @@ class PostRepository {
         savedPostIds = (savesData as List<dynamic>)
             .map((s) => s['post_id'] as String)
             .toSet();
+      } catch (_) {
+        // Continue if engagement subqueries fail
       }
 
       return list.map((json) {
@@ -104,14 +98,16 @@ class PostRepository {
         );
       }).toList();
     } catch (e) {
-      if (!AppConfig.isSupabaseConfigured) return _demoPosts;
       throw ServerException('Failed to load feed: ${e.toString()}');
     }
   }
 
+  /// Retrieves posts authored by a specific user ID.
   Future<List<PostModel>> getUserPosts(String userId) async {
     try {
       if (!AppConfig.isSupabaseConfigured) return [];
+
+      final currentUid = _supabase.auth.currentUser?.id;
 
       final data = await _supabase
           .from('posts')
@@ -120,14 +116,51 @@ class PostRepository {
           .order('created_at', ascending: false);
 
       final List<dynamic> list = data as List<dynamic>;
+      if (list.isEmpty) return [];
+
+      Set<String> likedPostIds = {};
+      Set<String> savedPostIds = {};
+
+      if (currentUid != null) {
+        final postIds = list.map((p) => p['id'] as String).toList();
+        try {
+          final likesData = await _supabase
+              .from('likes')
+              .select('post_id')
+              .eq('user_id', currentUid)
+              .filter('post_id', 'in', '(${postIds.join(",")})');
+
+          likedPostIds = (likesData as List<dynamic>)
+              .map((l) => l['post_id'] as String)
+              .toSet();
+
+          final savesData = await _supabase
+              .from('saved_posts')
+              .select('post_id')
+              .eq('user_id', currentUid)
+              .filter('post_id', 'in', '(${postIds.join(",")})');
+
+          savedPostIds = (savesData as List<dynamic>)
+              .map((s) => s['post_id'] as String)
+              .toSet();
+        } catch (_) {}
+      }
+
       return list
-          .map((json) => PostModel.fromJson(json as Map<String, dynamic>))
+          .map(
+            (json) => PostModel.fromJson(
+              json as Map<String, dynamic>,
+              isLiked: likedPostIds.contains(json['id']),
+              isSaved: savedPostIds.contains(json['id']),
+            ),
+          )
           .toList();
     } catch (e) {
       return [];
     }
   }
 
+  /// Creates a new post authored by the authenticated user.
   Future<PostModel> createPost({
     required String caption,
     String? imageUrl,
@@ -137,31 +170,17 @@ class PostRepository {
   }) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) {
-        throw const AppAuthException('You must be logged in to create a post');
+      if (user == null) {
+        throw const AppAuthException('You must be signed in to create a post.');
       }
-
       if (!AppConfig.isSupabaseConfigured) {
-        final newPost = PostModel(
-          id: 'demo-new-${DateTime.now().millisecondsSinceEpoch}',
-          authorId: 'demo-user-id',
-          authorUsername: 'demouser',
-          authorFullName: 'Demo User',
-          caption: caption,
-          imageUrl: imageUrl,
-          postType: postType,
-          educationalDescription: educationalDescription,
-          skillTags: skillTags,
-          createdAt: DateTime.now(),
-        );
-        _demoPosts.insert(0, newPost);
-        return newPost;
+        throw const AppAuthException('Supabase is not configured.');
       }
 
       final inserted = await _supabase
           .from('posts')
           .insert({
-            'author_id': user!.id,
+            'author_id': user.id,
             'caption': caption.trim(),
             'image_url': imageUrl,
             'post_type': postType,
@@ -172,21 +191,20 @@ class PostRepository {
           .select('*, profiles(username, full_name, avatar_url)')
           .single();
 
-      return PostModel.fromJson(inserted as Map<String, dynamic>);
+      return PostModel.fromJson(inserted);
+    } on AppAuthException {
+      rethrow;
     } catch (e) {
       throw ServerException('Failed to create post: ${e.toString()}');
     }
   }
 
+  /// Deletes a post owned by the authenticated user.
   Future<void> deletePost(String postId) async {
     try {
-      if (!AppConfig.isSupabaseConfigured) {
-        _demoPosts.removeWhere((p) => p.id == postId);
-        return;
-      }
-
       final user = _supabase.auth.currentUser;
       if (user == null) return;
+      if (!AppConfig.isSupabaseConfigured) return;
 
       await _supabase.from('posts').delete().match({
         'id': postId,
@@ -197,20 +215,21 @@ class PostRepository {
     }
   }
 
+  /// Toggles like status on a post.
   Future<void> toggleLike(String postId, bool isCurrentlyLiked) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) return;
+      if (user == null) return;
       if (!AppConfig.isSupabaseConfigured) return;
 
       if (isCurrentlyLiked) {
         await _supabase.from('likes').delete().match({
-          'user_id': user!.id,
+          'user_id': user.id,
           'post_id': postId,
         });
       } else {
         await _supabase.from('likes').insert({
-          'user_id': user!.id,
+          'user_id': user.id,
           'post_id': postId,
         });
       }
@@ -219,20 +238,21 @@ class PostRepository {
     }
   }
 
+  /// Toggles saved / bookmark status on a post.
   Future<void> toggleSave(String postId, bool isCurrentlySaved) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) return;
+      if (user == null) return;
       if (!AppConfig.isSupabaseConfigured) return;
 
       if (isCurrentlySaved) {
         await _supabase.from('saved_posts').delete().match({
-          'user_id': user!.id,
+          'user_id': user.id,
           'post_id': postId,
         });
       } else {
         await _supabase.from('saved_posts').insert({
-          'user_id': user!.id,
+          'user_id': user.id,
           'post_id': postId,
         });
       }
@@ -241,6 +261,7 @@ class PostRepository {
     }
   }
 
+  /// Fetches comments for a specific post.
   Future<List<CommentModel>> getComments(String postId) async {
     try {
       if (!AppConfig.isSupabaseConfigured) return [];
@@ -259,75 +280,67 @@ class PostRepository {
     }
   }
 
+  /// Adds a comment to a post from the authenticated user.
   Future<CommentModel> addComment(String postId, String content) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) {
-        throw const AppAuthException('You must be logged in to comment');
+      if (user == null) {
+        throw const AppAuthException('You must be signed in to comment.');
       }
-
       if (!AppConfig.isSupabaseConfigured) {
-        return CommentModel(
-          id: 'demo-comment-${DateTime.now().millisecondsSinceEpoch}',
-          postId: postId,
-          authorId: 'demo-user-id',
-          authorUsername: 'demouser',
-          authorFullName: 'Demo User',
-          content: content,
-          createdAt: DateTime.now(),
-        );
+        throw const AppAuthException('Supabase is not configured.');
       }
 
       final inserted = await _supabase
           .from('comments')
           .insert({
             'post_id': postId,
-            'author_id': user!.id,
+            'author_id': user.id,
             'content': content.trim(),
           })
           .select('*, profiles(username, full_name, avatar_url)')
           .single();
 
-      return CommentModel.fromJson(inserted as Map<String, dynamic>);
+      return CommentModel.fromJson(inserted);
+    } on AppAuthException {
+      rethrow;
     } catch (e) {
       throw ServerException('Failed to add comment: ${e.toString()}');
     }
   }
 
+  /// Uploads a post image to Supabase Storage.
   Future<String> uploadPostImage(File file) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) return '';
+      if (user == null) return '';
       if (!AppConfig.isSupabaseConfigured) return '';
 
       final ext = file.path.split('.').last.toLowerCase();
       final path =
-          '${user!.id}/post_${DateTime.now().millisecondsSinceEpoch}.$ext';
+          '${user.id}/post_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
-      await _supabase.storage
-          .from('post_images')
-          .upload(path, file, fileOptions: const FileOptions(upsert: true));
-
+      await _supabase.storage.from('post_images').upload(path, file);
       return _supabase.storage.from('post_images').getPublicUrl(path);
     } catch (e) {
-      throw ServerException('Failed to upload post image: ${e.toString()}');
+      throw ServerException('Image upload failed: ${e.toString()}');
     }
   }
 
-  Future<void> reportPost(String postId, String reason, String? details) async {
+  /// Reports a post for moderation review.
+  Future<void> reportPost(String postId, String reason, String? notes) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null && AppConfig.isSupabaseConfigured) return;
-      if (!AppConfig.isSupabaseConfigured) return;
+      if (user == null || !AppConfig.isSupabaseConfigured) return;
 
       await _supabase.from('reports').insert({
-        'reporter_id': user!.id,
+        'reporter_id': user.id,
         'reported_post_id': postId,
         'reason': reason,
-        'details': details,
+        'details': notes,
       });
     } catch (e) {
-      throw ServerException('Failed to submit report: ${e.toString()}');
+      throw ServerException('Failed to report post: ${e.toString()}');
     }
   }
 }

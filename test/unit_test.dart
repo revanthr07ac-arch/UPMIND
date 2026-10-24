@@ -36,10 +36,13 @@ void main() {
     test('ProfileModel fromJson and toJson', () {
       final json = {
         'id': 'u-1',
-        'username': 'creator_alex',
-        'full_name': 'Alex Vance',
+        'username': 'creator_john',
+        'full_name': 'John Doe',
         'avatar_url': 'https://example.com/avatar.jpg',
         'bio': 'Learning and building Flutter apps',
+        'institution': 'Stanford University',
+        'course': 'Computer Science B.S.',
+        'website_url': 'https://johndoe.dev',
         'location': 'Seattle, WA',
         'interests': ['Flutter', 'Design'],
         'experience_level': 'intermediate',
@@ -52,12 +55,18 @@ void main() {
 
       final profile = ProfileModel.fromJson(json);
       expect(profile.id, 'u-1');
-      expect(profile.username, 'creator_alex');
+      expect(profile.username, 'creator_john');
+      expect(profile.institution, 'Stanford University');
+      expect(profile.course, 'Computer Science B.S.');
+      expect(profile.websiteUrl, 'https://johndoe.dev');
       expect(profile.followersCount, 42);
       expect(profile.interests.length, 2);
 
       final output = profile.toJson();
-      expect(output['username'], 'creator_alex');
+      expect(output['username'], 'creator_john');
+      expect(output['institution'], 'Stanford University');
+      expect(output['course'], 'Computer Science B.S.');
+      expect(output['website_url'], 'https://johndoe.dev');
       expect(output['experience_level'], 'intermediate');
     });
 

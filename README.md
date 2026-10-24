@@ -25,10 +25,14 @@ Its unique differentiating mission is to connect people who can teach a skill wi
 
 ## 2. Key Features
 
-### 🔐 Authentication & Account Management
-- Real Supabase authentication with persistent sessions.
-- Sign Up with Full Name, unique Username, Email, and Password validation.
-- Sign In, Logout, and Password Reset flows.
+### 🔐 Authentication & Account Management (Real Email OTP Verification)
+- Real Supabase authentication with persistent sessions and email confirmation enforcement.
+- Mandatory 6-digit numeric OTP code verification sent to the user's real email address.
+- Custom OTP Verification screen featuring masked email, 6-digit auto-advancing input, clipboard paste support, and a 60-second resend cooldown timer.
+- Unverified accounts are strictly blocked from logging in or accessing feeds until email is confirmed.
+- Sign Up with Full Name, unique Username check, Email syntax validation, and Password confirmation.
+- Sign In with credential verification and unverified-email prompt to direct unconfirmed accounts to verification.
+- Password Reset with email validation and deep-link recovery.
 - Account deletion with server-side cascading cleanup (meeting Apple App Store & Google Play privacy requirements).
 
 ### 👤 Profile & Skill Portfolio

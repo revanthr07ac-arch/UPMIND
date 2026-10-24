@@ -5,9 +5,13 @@ class ProfileModel {
   final String? avatarUrl;
   final String? bio;
   final String? location;
+  final String? institution;
+  final String? course;
+  final String? websiteUrl;
   final List<String> interests;
   final String experienceLevel;
   final List<Map<String, dynamic>> portfolioLinks;
+  final int postCount;
   final int followersCount;
   final int followingCount;
   final bool isFollowing;
@@ -21,9 +25,13 @@ class ProfileModel {
     this.avatarUrl,
     this.bio,
     this.location,
+    this.institution,
+    this.course,
+    this.websiteUrl,
     this.interests = const [],
     this.experienceLevel = 'beginner',
     this.portfolioLinks = const [],
+    this.postCount = 0,
     this.followersCount = 0,
     this.followingCount = 0,
     this.isFollowing = false,
@@ -34,6 +42,9 @@ class ProfileModel {
   factory ProfileModel.fromJson(
     Map<String, dynamic> json, {
     bool isFollowing = false,
+    int? postCount,
+    int? followersCount,
+    int? followingCount,
   }) {
     return ProfileModel(
       id: json['id'] as String,
@@ -42,6 +53,9 @@ class ProfileModel {
       avatarUrl: json['avatar_url'] as String?,
       bio: json['bio'] as String?,
       location: json['location'] as String?,
+      institution: json['institution'] as String?,
+      course: json['course'] as String?,
+      websiteUrl: json['website_url'] as String?,
       interests:
           (json['interests'] as List<dynamic>?)
               ?.map((e) => e.toString())
@@ -53,8 +67,11 @@ class ProfileModel {
               ?.map((e) => Map<String, dynamic>.from(e as Map))
               .toList() ??
           [],
-      followersCount: json['followers_count'] as int? ?? 0,
-      followingCount: json['following_count'] as int? ?? 0,
+      postCount: postCount ?? (json['post_count'] as int? ?? 0),
+      followersCount:
+          followersCount ?? (json['followers_count'] as int? ?? 0),
+      followingCount:
+          followingCount ?? (json['following_count'] as int? ?? 0),
       isFollowing: isFollowing,
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString()) ?? DateTime.now()
@@ -73,6 +90,9 @@ class ProfileModel {
       'avatar_url': avatarUrl,
       'bio': bio,
       'location': location,
+      'institution': institution,
+      'course': course,
+      'website_url': websiteUrl,
       'interests': interests,
       'experience_level': experienceLevel,
       'portfolio_links': portfolioLinks,
@@ -90,9 +110,13 @@ class ProfileModel {
     String? avatarUrl,
     String? bio,
     String? location,
+    String? institution,
+    String? course,
+    String? websiteUrl,
     List<String>? interests,
     String? experienceLevel,
     List<Map<String, dynamic>>? portfolioLinks,
+    int? postCount,
     int? followersCount,
     int? followingCount,
     bool? isFollowing,
@@ -106,9 +130,13 @@ class ProfileModel {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       bio: bio ?? this.bio,
       location: location ?? this.location,
+      institution: institution ?? this.institution,
+      course: course ?? this.course,
+      websiteUrl: websiteUrl ?? this.websiteUrl,
       interests: interests ?? this.interests,
       experienceLevel: experienceLevel ?? this.experienceLevel,
       portfolioLinks: portfolioLinks ?? this.portfolioLinks,
+      postCount: postCount ?? this.postCount,
       followersCount: followersCount ?? this.followersCount,
       followingCount: followingCount ?? this.followingCount,
       isFollowing: isFollowing ?? this.isFollowing,

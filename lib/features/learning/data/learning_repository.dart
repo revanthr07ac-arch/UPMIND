@@ -165,7 +165,7 @@ class LearningRepository {
           )
           .single();
 
-      return LearningRequestModel.fromJson(inserted as Map<String, dynamic>);
+      return LearningRequestModel.fromJson(inserted);
     } catch (e) {
       throw ServerException('Failed to send request: ${e.toString()}');
     }
